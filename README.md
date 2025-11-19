@@ -1,5 +1,7 @@
 # Lightning Whisper MLX
 
+> **Fork Notice**: This is a fork of [mustafaaljadery/lightning-whisper-mlx](https://github.com/mustafaaljadery/lightning-whisper-mlx). All credit for the original implementation goes to [Mustafa Aljadery](https://github.com/mustafaaljadery). This fork focuses on integrating with newer libraries and adding features for specific use cases that may not be common for the original project.
+
 An incredibly fast implementation of Whisper optimized for Apple Silicon.
 
 ![Whisper Decoding Speed](./speed_image.png)
@@ -15,10 +17,39 @@ An incredibly fast implementation of Whisper optimized for Apple Silicon.
 
 ## Installation
 
-Install lightning whisper mlx using pip:
+### Install from PyPI (Original Package)
 
 ```bash
 pip install lightning-whisper-mlx
+```
+
+### Install from This Fork (Recommended for Latest Features)
+
+**Using UV (Recommended):**
+
+Add to your `pyproject.toml`:
+```toml
+[project]
+dependencies = [
+    "lightning-whisper-mlx @ git+https://github.com/bodis/lightning-whisper-mlx.git",
+]
+```
+
+Then install:
+```bash
+uv sync
+```
+
+**Using pip:**
+```bash
+pip install git+https://github.com/bodis/lightning-whisper-mlx.git
+```
+
+**For development (editable install):**
+```bash
+git clone https://github.com/bodis/lightning-whisper-mlx.git
+cd lightning-whisper-mlx
+uv pip install -e .
 ```
 
 ## Usage
