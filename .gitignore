@@ -1,33 +1,40 @@
+# macOS
 .DS_Store
-/lightning-whisper
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build artifacts
 /build
 /dist
 /*.egg-info
 
-*.mp3
-*/__pycache__/
-
-mlx_models/
-.claude/
-.venv/
-.vscode/
-
-# Python cache files
-__pycache__/
-*.pyc
-*.pyo
-
-# UV package manager
-uv.lock
-
 # Virtual environments
 .venv/
 venv/
+env/
 
-# Python version management
+# Package managers
+uv.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+mlx_models/
+*.mp3
+*.wav
+*.flac
+
+# Development
 .python-version
-
-# Development files
 main.py
 test.py
 test_dependencies.py
