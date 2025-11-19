@@ -3,3 +3,31 @@
 /build
 /dist
 /*.egg-info
+
+*.mp3
+*/__pycache__/
+
+mlx_models/
+.claude/
+.venv/
+.vscode/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# UV package manager
+uv.lock
+
+# Virtual environments
+.venv/
+venv/
+
+# Python version management
+.python-version
+
+# Development files
+main.py
+test.py
+test_dependencies.py
