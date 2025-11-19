@@ -21,9 +21,10 @@ env/
 # Package managers
 uv.lock
 
-# IDEs
+# IDEs and Editors
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 
