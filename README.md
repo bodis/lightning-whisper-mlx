@@ -54,33 +54,174 @@ uv pip install -e .
 
 ## Usage
 
-Models
+### Available Models
 
-```
-["tiny", "small", "distil-small.en", "base", "medium", distil-medium.en", "large", "large-v2", "distil-large-v2", "large-v3", "distil-large-v3"]
+```python
+["tiny", "small", "distil-small.en", "base", "medium", "distil-medium.en",
+ "large", "large-v2", "distil-large-v2", "large-v3", "distil-large-v3"]
 ```
 
-Quantization
+**Model Selection Guide:**
+- `*.en` models: English-only, faster and more accurate for English
+- Non-`.en` models: Support 99 languages + translation to English
+- `distil-*` models: Fewer layers, ~2x faster with minimal accuracy loss
+- Size trade-off: `tiny` (fastest, least accurate) → `large` (slowest, most accurate)
 
-```
+### Quantization Options
+
+```python
 [None, "4bit", "8bit"]
 ```
 
-#### Example
+- `None`: Full precision (best quality, slower)
+- `"4bit"`: 4-bit quantization (faster, ~75% smaller memory)
+- `"8bit"`: 8-bit quantization (balanced speed/quality)
+
+### Basic Example
 
 ```python
 from lightning_whisper_mlx import LightningWhisperMLX
 
 whisper = LightningWhisperMLX(model="distil-medium.en", batch_size=12, quant=None)
 
-text = whisper.transcribe(audio_path="/audio.mp3")['text']
+result = whisper.transcribe(audio_path="audio.mp3")
 
-print(text)
+print(result['text'])      # Full transcription text
+print(result['language'])  # Detected/specified language
+print(result['segments'])  # List of segments with timestamps
+```
+
+### Advanced Usage
+
+For advanced features like VAD integration and context prompts, use `transcribe_audio()` directly:
+
+```python
+from lightning_whisper_mlx.transcribe import transcribe_audio
+
+result = transcribe_audio(
+    audio="audio.mp3",  # Path, numpy array, or MLX array
+    path_or_hf_repo="./mlx_models/base.en",
+    language="en",                      # Language code or None for auto-detect
+    batch_size=12,                      # Higher = faster but more memory
+    initial_prompt="Context text...",   # Improve accuracy with domain context
+    clip_timestamps=[0, 30, 60, 90],    # Process specific time ranges (VAD)
+    task="transcribe",                  # or "translate" for English translation
+    temperature=0.0,                    # Sampling temperature (0.0 = greedy)
+    verbose=True
+)
+```
+
+**Key parameters:**
+- `audio`: File path, numpy array (16kHz mono float32), or MLX array
+- `initial_prompt`: Context to improve accuracy (names, technical terms, etc.)
+- `clip_timestamps`: List/string of time ranges in seconds for VAD integration
+- `condition_on_previous_text`: Use previous output as context (default: True)
+- `batch_size`: Tune based on model size (tiny/base: 12-24, medium: 6-12, large: 1-6)
+
+## Output Structure
+
+The transcription returns a dictionary with the following structure:
+
+```python
+{
+    'text': str,           # Full transcription text
+    'segments': list,      # List of segments with timing information
+    'language': str        # Detected or specified language code
+}
+```
+
+### Segments Format
+
+Each segment in the `segments` list is currently a **list** (not dict) with the format:
+
+```python
+[start_frame, end_frame, text]
+```
+
+- `start_frame` (int): Starting frame index in mel spectrogram
+- `end_frame` (int): Ending frame index in mel spectrogram
+- `text` (str): Transcribed text for this segment
+
+**Converting frames to seconds:**
+
+```python
+from lightning_whisper_mlx.audio import HOP_LENGTH, SAMPLE_RATE
+
+for start_frame, end_frame, text in result['segments']:
+    start_sec = start_frame * HOP_LENGTH / SAMPLE_RATE
+    end_sec = end_frame * HOP_LENGTH / SAMPLE_RATE
+    print(f"[{start_sec:.2f}s - {end_sec:.2f}s]: {text}")
+```
+
+### Complete Output Example
+
+```python
+result = whisper.transcribe("audio.mp3")
+
+# Output structure:
+{
+    'text': ' This is the full transcription of the entire audio file.',
+    'segments': [
+        [0, 1500, ' This is the full'],
+        [1500, 3000, ' transcription of the entire'],
+        [3000, 4500, ' audio file.']
+    ],
+    'language': 'en'
+}
+```
+
+## Usage Examples
+
+### VAD-Based Segmentation
+
+Process only speech segments with context passing:
+
+```python
+from lightning_whisper_mlx.transcribe import transcribe_audio
+
+# Your VAD segments (from silero-vad, pyannote, etc.)
+vad_segments = [(0.5, 12.3), (15.8, 45.2), (50.1, 78.6)]  # (start_sec, end_sec)
+
+results = []
+context = ""
+
+for start, end in vad_segments:
+    result = transcribe_audio(
+        audio="podcast.mp3",
+        path_or_hf_repo="./mlx_models/base.en",
+        clip_timestamps=[start, end],
+        initial_prompt=context,  # Pass context from previous segments
+        language="en",
+        batch_size=12
+    )
+
+    results.append({'start': start, 'end': end, 'text': result['text']})
+    context = ' '.join(result['text'].split()[-50:])  # Keep last 50 words
+```
+
+### Processing Segments with Timestamps
+
+Convert frame indices to seconds:
+
+```python
+from lightning_whisper_mlx import LightningWhisperMLX
+from lightning_whisper_mlx.audio import HOP_LENGTH, SAMPLE_RATE
+
+whisper = LightningWhisperMLX(model="base.en", batch_size=12)
+result = whisper.transcribe("audio.mp3")
+
+for start_frame, end_frame, text in result['segments']:
+    start_sec = start_frame * HOP_LENGTH / SAMPLE_RATE
+    end_sec = end_frame * HOP_LENGTH / SAMPLE_RATE
+    print(f"[{start_sec:.2f}s - {end_sec:.2f}s]: {text}")
 ```
 
 ## Notes
 
-- The default batch_size is `12`, higher is better for throughput but you might run into memory issues. The heuristic is it really depends on the size of the model. If you are running the smaller models, then higher batch size, larger models, lower batch size. Also keep in mind your unified memory!
+- **Batch size**: Default is 12. Increase for small models (12-24) on high-memory systems. Decrease for large models (1-6). Monitor Activity Monitor.
+- **Frame conversion**: Segments use frame indices. Convert to seconds: `frame * HOP_LENGTH / SAMPLE_RATE` (see example above).
+- **Context improves accuracy**: Use `initial_prompt` for domain-specific terms, proper nouns, or to maintain context across VAD segments.
+- **Audio constants**: Import from `lightning_whisper_mlx.audio`: `HOP_LENGTH=160`, `SAMPLE_RATE=16000`, `FRAMES_PER_SECOND=100`
 
 ## Live Audio / Streaming Support
 
