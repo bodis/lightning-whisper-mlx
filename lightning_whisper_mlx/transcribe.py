@@ -3,6 +3,8 @@
 import sys
 import warnings
 from typing import List, Optional, Tuple, Union
+import gc
+from datetime import datetime
 
 import mlx.core as mx
 import numpy as np
@@ -49,15 +51,173 @@ def _get_end(segments: List[dict]) -> Optional[float]:
 
 
 class ModelHolder:
-    model = None
-    model_path = None
+    """
+    Manages cached Whisper models with LRU eviction policy.
+
+    Caches multiple models in memory with configurable cache size.
+    When cache is full, evicts the least recently used model before loading a new one.
+    """
+    # Cache storage: {(model_path, dtype): {"model": model, "last_access": timestamp}}
+    _cache = {}
+    # Maximum number of models to keep in cache (default: 1 for backward compatibility)
+    _max_cache_size = 1
+
+    @classmethod
+    def set_cache_size(cls, size: int):
+        """
+        Set the maximum number of models to cache in memory.
+
+        Args:
+            size: Maximum number of models to cache (must be >= 1)
+
+        Raises:
+            ValueError: If size < 1
+        """
+        if size < 1:
+            raise ValueError("Cache size must be at least 1")
+
+        old_size = cls._max_cache_size
+        cls._max_cache_size = size
+
+        # If reducing cache size, evict oldest models
+        if size < old_size:
+            cls._evict_to_size(size)
+
+    @classmethod
+    def get_cache_size(cls) -> int:
+        """Get the current maximum cache size."""
+        return cls._max_cache_size
+
+    @classmethod
+    def get_cached_count(cls) -> int:
+        """Get the number of currently cached models."""
+        return len(cls._cache)
 
     @classmethod
     def get_model(cls, model_path: str, dtype: mx.Dtype):
-        if cls.model is None or model_path != cls.model_path:
-            cls.model = load_model(model_path, dtype=dtype)
-            cls.model_path = model_path
-        return cls.model
+        """
+        Get a model from cache or load it if not cached.
+
+        Implements LRU eviction: if cache is full, removes the least recently used model
+        before loading a new one.
+
+        Args:
+            model_path: Path to the model
+            dtype: MLX data type for the model
+
+        Returns:
+            Loaded Whisper model
+        """
+        cache_key = (model_path, str(dtype))
+
+        # Check if model is already cached
+        if cache_key in cls._cache:
+            # Update last access time
+            cls._cache[cache_key]["last_access"] = datetime.now()
+            return cls._cache[cache_key]["model"]
+
+        # Need to load new model - check if we need to evict first
+        if len(cls._cache) >= cls._max_cache_size:
+            cls._evict_lru()
+
+        # Load the new model
+        model = load_model(model_path, dtype=dtype)
+
+        # Cache it with current timestamp
+        cls._cache[cache_key] = {
+            "model": model,
+            "last_access": datetime.now()
+        }
+
+        return model
+
+    @classmethod
+    def _evict_lru(cls):
+        """Evict the least recently used model from cache."""
+        if not cls._cache:
+            return
+
+        # Find the least recently used model
+        lru_key = min(cls._cache.items(), key=lambda x: x[1]["last_access"])[0]
+
+        # Remove it from cache
+        del cls._cache[lru_key]
+
+        # Force garbage collection to free MLX memory
+        gc.collect()
+
+    @classmethod
+    def _evict_to_size(cls, target_size: int):
+        """Evict models until cache size is at or below target_size."""
+        while len(cls._cache) > target_size:
+            cls._evict_lru()
+
+    @classmethod
+    def clear_cache(cls):
+        """Clear all cached models and free memory."""
+        cls._cache.clear()
+        gc.collect()
+
+    @classmethod
+    def unload_model(cls, model_path: str, dtype: mx.Dtype = None):
+        """
+        Manually unload a specific model from cache.
+
+        Use this when you know a model won't be needed for an extended period.
+        The model will be reloaded from disk on next access.
+
+        Args:
+            model_path: Path to the model to unload
+            dtype: Optional dtype to specify exact cache entry. If None, unloads all dtypes for this path.
+
+        Returns:
+            bool: True if model(s) were unloaded, False if not found in cache
+        """
+        unloaded = False
+
+        if dtype is not None:
+            # Unload specific model+dtype combination
+            cache_key = (model_path, str(dtype))
+            if cache_key in cls._cache:
+                del cls._cache[cache_key]
+                unloaded = True
+        else:
+            # Unload all dtypes for this model path
+            keys_to_remove = [
+                key for key in cls._cache.keys()
+                if key[0] == model_path
+            ]
+            for key in keys_to_remove:
+                del cls._cache[key]
+                unloaded = True
+
+        if unloaded:
+            gc.collect()
+
+        return unloaded
+
+    @classmethod
+    def get_cache_info(cls) -> dict:
+        """
+        Get information about cached models.
+
+        Returns:
+            Dictionary with cache statistics and model info
+        """
+        info = {
+            "max_size": cls._max_cache_size,
+            "current_size": len(cls._cache),
+            "models": []
+        }
+
+        for (model_path, dtype), data in cls._cache.items():
+            info["models"].append({
+                "model_path": model_path,
+                "dtype": dtype,
+                "last_access": data["last_access"].isoformat()
+            })
+
+        return info
 
 
 def transcribe_audio(

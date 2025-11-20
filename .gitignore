@@ -39,3 +39,11 @@ mlx_models/
 main.py
 test.py
 test_dependencies.py
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+coverage.xml
+*.cover

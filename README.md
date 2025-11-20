@@ -13,6 +13,7 @@ An incredibly fast implementation of Whisper optimized for Apple Silicon.
 - **Batched Decoding** -> Higher Throughput
 - **Distilled Models** -> Faster Decoding (less layers)
 - **Quantized Models** -> Faster Memory Movement
+- **Intelligent Model Caching** -> Keep models in memory for long-running apps (fork feature)
 - _Coming Soon: Speculative Decoding -> Faster Decoding with Assistant Model_
 
 ## Installation
@@ -90,6 +91,75 @@ print(result['text'])      # Full transcription text
 print(result['language'])  # Detected/specified language
 print(result['segments'])  # List of segments with timestamps
 ```
+
+### Model Caching for Long-Running Applications
+
+**This fork includes intelligent model caching designed for long-running applications** (servers, daemons, etc.) where you want models to stay in memory between transcription requests without repeated loading.
+
+**Default Behavior (Cache Size = 1):**
+```python
+from lightning_whisper_mlx import LightningWhisperMLX
+
+# Initialize once
+whisper = LightningWhisperMLX(model="distil-small.en", batch_size=12)
+
+# First transcription - model loads into memory
+result1 = whisper.transcribe("audio1.mp3")
+
+# Hours/days later - model still in cache, no reload!
+result2 = whisper.transcribe("audio2.mp3")  # Instant, no loading delay
+```
+
+**Multiple Models (Cache Size > 1):**
+```python
+# Configure to cache 2 models simultaneously
+LightningWhisperMLX.set_model_cache_size(2)
+
+# Both models stay in memory for instant switching
+whisper_en = LightningWhisperMLX(model="distil-small.en")
+whisper_multi = LightningWhisperMLX(model="small")
+
+# Use either model - no reloading needed
+if language == "en":
+    result = whisper_en.transcribe(audio)
+else:
+    result = whisper_multi.transcribe(audio)
+```
+
+**Manual Memory Management:**
+```python
+# Unload a specific model when not needed for extended period
+LightningWhisperMLX.unload_model("./mlx_models/distil-small.en")
+
+# Model will auto-reload on next use
+result = whisper.transcribe("audio.mp3")  # Reloads model
+
+# Clear all cached models
+LightningWhisperMLX.clear_model_cache()
+```
+
+**Cache Management API:**
+```python
+# Get current cache size limit
+size = LightningWhisperMLX.get_model_cache_size()  # Default: 1
+
+# Set cache size (how many models to keep in memory)
+LightningWhisperMLX.set_model_cache_size(3)
+
+# Get number of currently cached models
+count = LightningWhisperMLX.get_cached_model_count()
+
+# Get detailed cache information
+info = LightningWhisperMLX.get_cache_info()
+# Returns: {'max_size': 3, 'current_size': 2, 'models': [...]}
+```
+
+**How It Works:**
+- Models are cached in memory after first use
+- Default cache size is **1** (single model stays in memory)
+- When cache is full, least recently used (LRU) model is evicted
+- Perfect for long-running apps where you want instant transcription without reload delays
+- Manual unloading available for explicit memory control
 
 ### Advanced Usage
 
