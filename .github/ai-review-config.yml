@@ -1,0 +1,151 @@
+# AI Code Review Configuration for Lightning Whisper MLX
+# This configuration customizes the review behavior for this Apple Silicon Whisper implementation
+
+# Project metadata
+project_context:
+  name: "Lightning Whisper MLX"
+  architecture: "Apple Silicon ML Framework (MLX) - Batch Audio Transcription"
+  description: |
+    High-performance Whisper implementation optimized for Apple Silicon (M1/M2/M3).
+    Fork of mustafaaljadery/lightning-whisper-mlx with newer dependencies and modern packaging.
+    Batch processing only (NOT real-time streaming). Uses MLX framework for M-series chips.
+
+# Project-specific constraints and requirements
+project_constraints:
+  # Architecture constraints
+  - "This is BATCH PROCESSING ONLY - not designed for real-time streaming"
+  - "Optimized for Apple Silicon (M1/M2/M3) using MLX framework"
+  - "Requires complete audio file before transcription (30-second windows)"
+
+  # Tokenization constraints
+  - "Two model families: English-only (n_vocab < 51865) and Multilingual (n_vocab >= 51865)"
+  - "Base vocabularies (gpt2.tiktoken, multilingual.tiktoken) are FROZEN - never modify"
+  - "Special tokens (1,607 tokens) generated algorithmically in code"
+  - "tiktoken provides BPE algorithm only - vocabulary data from bundled files"
+
+  # Memory and performance
+  - "batch_size is critical trade-off: higher = better throughput but more unified memory"
+  - "Models cached in ./mlx_models/ directory on first use"
+  - "Unified memory usage must be monitored (Activity Monitor)"
+
+  # Dependencies
+  - "Requires ffmpeg in PATH for audio decoding"
+  - "mlx >= 0.29.0, tiktoken >= 0.12.0, torch >= 2.9.0, numpy >= 2.3.0"
+  - "Modern packaging: pyproject.toml with hatchling (NOT setup.py)"
+
+# What to review
+review_aspects:
+  # Static analysis for Python
+  - name: python_static_analysis
+    enabled: true
+    type: classical
+    tools:
+      - ruff       # Fast linting and formatting
+      - pylint     # Deep code analysis
+      - bandit     # Security issues
+      - mypy       # Type checking
+
+  # AI-powered security review
+  - name: security_review
+    enabled: true
+    type: ai
+    prompt_file: prompts/security-review.md
+    focus_areas:
+      - "Audio file handling and validation (ffmpeg integration)"
+      - "Model loading from HuggingFace Hub (cache poisoning)"
+      - "File I/O operations (vocabulary files, model cache)"
+      - "Memory safety (unified memory management)"
+      - "Input validation (audio paths, batch sizes)"
+
+  # AI-powered architecture review
+  - name: architecture_review
+    enabled: true
+    type: ai
+    prompt_file: prompts/architecture-review.md
+    focus_areas:
+      - "Model architecture and family detection (English-only vs Multilingual)"
+      - "Tokenization strategy (base vocab + special tokens)"
+      - "Batch processing optimization"
+      - "Memory management (MLX unified memory)"
+      - "Caching strategies (model cache, vocabulary loading)"
+
+  # AI-powered code quality review
+  - name: quality_review
+    enabled: true
+    type: ai
+    prompt_file: prompts/code-quality-review.md
+    focus_areas:
+      - "Error handling (file not found, OOM, ffmpeg failures)"
+      - "API design and usability"
+      - "Documentation completeness"
+      - "Type hints and type safety"
+      - "Performance considerations (batch_size trade-offs)"
+
+  # AI-powered performance review
+  - name: performance_review
+    enabled: true
+    type: ai
+    prompt_file: prompts/performance-review.md
+    focus_areas:
+      - "Batch processing efficiency"
+      - "Memory allocation patterns"
+      - "Model loading and caching"
+      - "Audio preprocessing pipeline"
+      - "MLX framework best practices"
+
+# Blocking rules - when to prevent PR merging
+blocking_rules:
+  # Always block on critical issues
+  block_on_critical: true
+
+  # Block on high-severity issues (stricter than default)
+  block_on_high: false
+
+  # Maximum number of findings before blocking
+  max_findings:
+    critical: 0      # Zero tolerance for critical issues
+    high: 8          # Allow up to 8 high-severity issues
+    medium: 20       # Allow up to 20 medium-severity issues
+    low: null        # No limit on low-severity
+    info: null       # No limit on informational
+
+# Filtering options
+filtering:
+  # Only report issues on lines that were changed in this PR
+  only_changed_lines: true
+
+  # Minimum severity to report (info = report everything)
+  min_severity: "info"
+
+  # Exclude certain file patterns
+  exclude_patterns:
+    - "**/__pycache__/**"
+    - "**/.pytest_cache/**"
+    - "**/mlx_models/**"      # Downloaded model cache
+    - "**/*.pyc"
+    - "**/.mypy_cache/**"
+
+# Performance tuning
+performance:
+  # Run reviews in parallel when possible
+  parallel_reviews: true
+
+  # Maximum retries for AI reviews (API failures)
+  ai_review_max_retries: 2
+
+  # Timeout for individual review aspects (seconds)
+  review_timeout: 300
+
+# Output configuration
+output:
+  # Include file paths in comments
+  include_file_paths: true
+
+  # Include severity in comments
+  include_severity: true
+
+  # Include tool name in comments
+  include_tool_name: true
+
+  # Group findings by file
+  group_by_file: true

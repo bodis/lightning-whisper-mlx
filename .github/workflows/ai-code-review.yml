@@ -1,0 +1,41 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'lightning_whisper_mlx/**'
+      - 'tests/**'
+
+# Prevent multiple runs on rapid pushes
+concurrency:
+  group: ai-review-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  ai-review:
+    name: AI Code Review
+    uses: bodis/ai-review-cicd-actions/.github/workflows/reusable-ai-review.yml@main
+    with:
+      # Python configuration
+      python-version: '3.12'
+      enable-python-analysis: true
+
+      # Disable JavaScript analysis (Python-only project)
+      enable-js-analysis: false
+
+      # Project-specific configuration
+      config-file: '.github/ai-review-config.yml'
+
+      # Fail workflow if critical issues found
+      fail-on-blocking: true
+
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
