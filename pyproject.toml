@@ -27,6 +27,14 @@ dev = [
     "pytest-cov>=6.0.0,<7.0.0",
     "pytest-xdist>=3.6.0,<4.0.0",
 ]
+# CI-only dependencies for static analysis on non-Apple platforms
+ci = [
+    "pytest>=8.0.0,<9.0.0",
+    "ruff>=0.8.0,<1.0.0",
+    "bandit>=1.8.0,<2.0.0",
+    "mypy>=1.13.0,<2.0.0",
+    "pylint>=3.3.0,<4.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -77,4 +85,87 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "@abstractmethod",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "mlx_models",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "S",   # flake8-bandit (security)
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "mlx_models",
+]
+# Security checks to enable
+tests = [
+    "B108",  # Hardcoded temp file
+    "B201",  # Flask debug mode
+    "B301",  # Pickle usage
+    "B302",  # marshal usage
+    "B303",  # MD5 or SHA1 usage
+    "B304",  # Insecure cipher usage
+    "B305",  # Insecure cipher mode
+    "B306",  # Insecure mktemp usage
+    "B307",  # eval usage
+    "B308",  # mark_safe usage
+    "B310",  # URL open
+    "B311",  # Random for crypto
+    "B312",  # Telnet usage
+    "B313",  # XML parsing
+    "B314",  # XML element tree
+    "B315",  # XML expat
+    "B316",  # XML sax
+    "B317",  # XML minidom
+    "B318",  # XML pull
+    "B319",  # XML etree
+    "B320",  # XML lxml
+    "B321",  # FTP usage
+    "B322",  # Input usage
+    "B323",  # Unverified SSL context
+    "B324",  # hashlib weak hashes
+    "B325",  # tempfile usage
+    "B601",  # Shell injection
+    "B602",  # Shell with shell=True
+    "B603",  # Subprocess without shell
+    "B604",  # Any shell=True
+    "B605",  # Shell injection via command
+    "B606",  # Shell injection via shell=True
+    "B607",  # Partial path in shell
+    "B608",  # SQL injection
+    "B609",  # Linux wildcard injection
+]
+# Path traversal should be caught by B108 (temp file) and general security analysis
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Too strict for existing codebase
+ignore_missing_imports = true  # Ignore missing stubs for MLX
+exclude = [
+    "tests",
+    "mlx_models",
 ]
