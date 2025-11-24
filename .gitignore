@@ -18,9 +18,6 @@ __pycache__/
 venv/
 env/
 
-# Package managers
-uv.lock
-
 # IDEs and Editors
 .vscode/
 .idea/
