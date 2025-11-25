@@ -227,16 +227,17 @@ def transcribe_audio(
     verbose: Optional[bool] = None,
     temperature: Union[float, Tuple[float, ...]] = (0.0, 1.0),
     compression_ratio_threshold: Optional[float] = 2.4,
-    logprob_threshold: Optional[float] = -1, 
+    logprob_threshold: Optional[float] = -1,
     no_speech_threshold: Optional[float] = 0.6,
     condition_on_previous_text: bool = True,
     initial_prompt: Optional[str] = None,
     word_timestamps: bool = False,
-    prepend_punctuations: str = "\"'“¿([{-",
-    append_punctuations: str = "\"'.。,，!！?？:：”)]}、",
+    prepend_punctuations: str = "\"'"¿([{-",
+    append_punctuations: str = "\"'.。,，!！?？:：")]}、",
     clip_timestamps: Union[str, List[float]] = "0",
     hallucination_silence_threshold: Optional[float] = None,
     batch_size: 6,
+    audio_cache_dir: Optional[str] = None,
     **decode_options,
 ):
     """
@@ -309,7 +310,7 @@ def transcribe_audio(
     model = ModelHolder.get_model(path_or_hf_repo, dtype)
 
     # Pad 30-seconds of silence to the input audio, for slicing
-    mel = log_mel_spectrogram(audio, n_mels=model.dims.n_mels, padding=N_SAMPLES)
+    mel = log_mel_spectrogram(audio, n_mels=model.dims.n_mels, padding=N_SAMPLES, cache_dir=audio_cache_dir)
     content_frames = mel.shape[-2] - N_FRAMES
 
     if verbose:

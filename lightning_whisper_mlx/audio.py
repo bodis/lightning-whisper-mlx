@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import os
+import hashlib
 from functools import lru_cache
 from subprocess import CalledProcessError, run
 from typing import Optional, Union
@@ -21,7 +22,36 @@ FRAMES_PER_SECOND = SAMPLE_RATE // HOP_LENGTH  # 10ms per audio frame
 TOKENS_PER_SECOND = SAMPLE_RATE // N_SAMPLES_PER_TOKEN  # 20ms per audio token
 
 
-def load_audio(file: str, sr: int = SAMPLE_RATE):
+def save_processed_audio(audio_data: mx.array, cache_dir: str, filename: str) -> str:
+    """
+    Save processed audio data to cache directory for faster reloading.
+
+    Parameters
+    ----------
+    audio_data: mx.array
+        The processed audio waveform to cache
+    cache_dir: str
+        Directory to save cached audio (can be relative or absolute)
+    filename: str
+        Name for the cached file
+
+    Returns
+    -------
+    str: Path to the saved cache file
+    """
+    # Create cache directory if it doesn't exist
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # Generate cache filename - allow user-specified paths for flexibility
+    cache_path = os.path.join(cache_dir, filename)
+
+    # Save the processed audio as numpy array
+    np.save(cache_path, np.array(audio_data))
+
+    return cache_path
+
+
+def load_audio(file: str, sr: int = SAMPLE_RATE, cache_dir: Optional[str] = None):
     """
     Open an audio file and read as mono waveform, resampling as necessary
 
@@ -33,10 +63,25 @@ def load_audio(file: str, sr: int = SAMPLE_RATE):
     sr: int
         The sample rate to resample the audio if necessary
 
+    cache_dir: Optional[str]
+        Optional directory to cache processed audio for faster reloading.
+        If provided, will save/load from this directory.
+
     Returns
     -------
     A NumPy array containing the audio waveform, in float32 dtype.
     """
+
+    # Check cache if cache_dir is provided
+    if cache_dir:
+        file_hash = hashlib.md5(file.encode()).hexdigest()
+        cache_filename = f"{file_hash}_{sr}.npy"
+        cache_path = os.path.join(cache_dir, cache_filename)
+
+        # Load from cache if exists
+        if os.path.exists(cache_path):
+            cached_audio = np.load(cache_path)
+            return mx.array(cached_audio)
 
     # This launches a subprocess to decode audio while down-mixing
     # and resampling as necessary.  Requires the ffmpeg CLI in PATH.
@@ -58,7 +103,15 @@ def load_audio(file: str, sr: int = SAMPLE_RATE):
     except CalledProcessError as e:
         raise RuntimeError(f"Failed to load audio: {e.stderr.decode()}") from e
 
-    return mx.array(np.frombuffer(out, np.int16)).flatten().astype(mx.float32) / 32768.0
+    audio_array = mx.array(np.frombuffer(out, np.int16)).flatten().astype(mx.float32) / 32768.0
+
+    # Save to cache if cache_dir is provided
+    if cache_dir:
+        file_hash = hashlib.md5(file.encode()).hexdigest()
+        cache_filename = f"{file_hash}_{sr}.npy"
+        save_processed_audio(audio_array, cache_dir, cache_filename)
+
+    return audio_array
 
 
 def pad_or_trim(array, length: int = N_SAMPLES, *, axis: int = -1):
@@ -131,6 +184,7 @@ def log_mel_spectrogram(
     audio: Union[str, np.ndarray],
     n_mels: int = 80,
     padding: int = 0,
+    cache_dir: Optional[str] = None,
 ):
     """
     Compute the log-Mel spectrogram of
@@ -146,6 +200,9 @@ def log_mel_spectrogram(
     padding: int
         Number of zero samples to pad to the right
 
+    cache_dir: Optional[str]
+        Optional directory for caching preprocessed audio data
+
     Returns
     -------
     mx.array, shape = (80, n_frames)
@@ -154,7 +211,7 @@ def log_mel_spectrogram(
     device = mx.default_device()
     mx.set_default_device(mx.cpu)
     if isinstance(audio, str):
-        audio = load_audio(audio)
+        audio = load_audio(audio, cache_dir=cache_dir)
     elif not isinstance(audio, mx.array):
         audio = mx.array(audio)
 
